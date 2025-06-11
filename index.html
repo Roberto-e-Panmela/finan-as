@@ -1,0 +1,258 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Controle Financeiro Familiar</title>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <style>
+    body {
+      background-color: #121212;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background-color: #6a0dad;
+      padding: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 {
+      font-size: 1.2rem;
+      color: #fff;
+    }
+    nav a {
+      color: #ccc;
+      margin: 0 10px;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .container {
+      padding: 20px;
+    }
+    .alert {
+      background: #d4edda;
+      color: #155724;
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .cards {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .card {
+      flex: 1;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      font-weight: bold;
+    }
+    .card.receitas {
+      background-color: #28a745;
+    }
+    .card.despesas {
+      background-color: #dc3545;
+    }
+    .card.saldo {
+      background-color: #007bff;
+    }
+    form {
+      background-color: #1e1e1e;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 10px;
+    }
+    input, select, button {
+      padding: 10px;
+      margin: 5px 0 15px;
+      width: 100%;
+      border: none;
+      border-radius: 5px;
+    }
+    button {
+      background-color: #6a0dad;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    table {
+      width: 100%;
+      background-color: #1e1e1e;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #333;
+    }
+    th {
+      background-color: #333;
+    }
+    .export-btn {
+      margin-top: 10px;
+      background: #17a2b8;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📊 Controle Financeiro Familiar</h1>
+    <nav>
+      <a href="#">Transações</a>
+      <a href="#">Dashboard</a>
+      <a href="#">Relatórios</a>
+    </nav>
+  </header>
+  <div class="container">
+    <div id="alert" class="alert">Transação adicionada com sucesso!</div>
+
+    <div class="cards">
+      <div class="card receitas" id="receitasCard">
+        ↑ Receitas<br />
+        R$ <span id="receitasTotal">0.00</span>
+      </div>
+      <div class="card despesas" id="despesasCard">
+        ↓ Despesas<br />
+        R$ <span id="despesasTotal">0.00</span>
+      </div>
+      <div class="card saldo" id="saldoCard">
+        ⚖️ Saldo<br />
+        R$ <span id="saldoTotal">0.00</span>
+      </div>
+    </div>
+
+    <form id="transacaoForm">
+      <h2>➕ Nova Transação</h2>
+      <label>Tipo:
+        <select id="tipo">
+          <option value="receita">Receita</option>
+          <option value="despesa">Despesa</option>
+        </select>
+      </label>
+      <label>Categoria:
+        <select id="categoria">
+          <option value="Salário">Salário</option>
+          <option value="Aluguel">Aluguel</option>
+          <option value="Impostos e Multas">Impostos e Multas</option>
+          <option value="Outros">Outros</option>
+        </select>
+      </label>
+      <label>Valor:
+        <input type="number" id="valor" required />
+      </label>
+      <label>Descrição:
+        <input type="text" id="descricao" />
+      </label>
+      <label>Data:
+        <input type="date" id="data" />
+      </label>
+      <label>Usuário:
+        <input type="text" id="usuario" />
+      </label>
+      <button type="submit">💾 Adicionar Transação</button>
+    </form>
+
+    <button class="export-btn" onclick="exportarCSV()">⬇️ Exportar para CSV</button>
+    <button class="export-btn" onclick="exportarExcel()">📄 Exportar para Excel</button>
+
+    <table id="tabelaTransacoes">
+      <thead>
+        <tr>
+          <th>Tipo</th>
+          <th>Categoria</th>
+          <th>Valor</th>
+          <th>Descrição</th>
+          <th>Data</th>
+          <th>Usuário</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    let totalReceitas = 0;
+    let totalDespesas = 0;
+    const transacoes = [];
+
+    document.getElementById('transacaoForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      const tipo = document.getElementById('tipo').value;
+      const categoria = document.getElementById('categoria').value;
+      const valor = parseFloat(document.getElementById('valor').value);
+      const descricao = document.getElementById('descricao').value;
+      const data = document.getElementById('data').value;
+      const usuario = document.getElementById('usuario').value;
+
+      const transacao = { tipo, categoria, valor, descricao, data, usuario };
+      transacoes.push(transacao);
+
+      const tabela = document.getElementById('tabelaTransacoes').querySelector('tbody');
+      const linha = tabela.insertRow();
+      linha.insertCell(0).textContent = tipo;
+      linha.insertCell(1).textContent = categoria;
+      linha.insertCell(2).textContent = `R$ ${valor.toFixed(2)}`;
+      linha.insertCell(3).textContent = descricao;
+      linha.insertCell(4).textContent = data;
+      linha.insertCell(5).textContent = usuario;
+
+      if (tipo === 'receita') totalReceitas += valor;
+      else totalDespesas += valor;
+
+      const saldo = totalReceitas - totalDespesas;
+      document.getElementById('receitasTotal').textContent = totalReceitas.toFixed(2);
+      document.getElementById('despesasTotal').textContent = totalDespesas.toFixed(2);
+      document.getElementById('saldoTotal').textContent = saldo.toFixed(2);
+
+      document.getElementById('alert').style.display = 'block';
+      setTimeout(() => {
+        document.getElementById('alert').style.display = 'none';
+      }, 3000);
+
+      this.reset();
+    });
+
+    function exportarCSV() {
+      const linhas = ['Tipo,Categoria,Valor,Descrição,Data,Usuário'];
+      for (const t of transacoes) {
+        linhas.push(`${t.tipo},${t.categoria},${t.valor},${t.descricao},${t.data},${t.usuario}`);
+      }
+      const csv = linhas.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'transacoes.csv';
+      link.click();
+    }
+
+    function exportarExcel() {
+      const dados = transacoes.map(t => ({
+        Tipo: t.tipo,
+        Categoria: t.categoria,
+        Valor: t.valor,
+        Descrição: t.descricao,
+        Data: t.data,
+        Usuário: t.usuario
+      }));
+      const worksheet = XLSX.utils.json_to_sheet(dados);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Transações');
+      XLSX.writeFile(workbook, 'transacoes.xlsx');
+    }
+  </script>
+</body>
+</html>
