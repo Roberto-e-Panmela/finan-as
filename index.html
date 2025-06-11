@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Controle Financeiro Familiar</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       background-color: #121212;
@@ -103,12 +102,6 @@
       margin-top: 10px;
       background: #17a2b8;
     }
-    .grafico-container {
-      margin-top: 40px;
-      background: #1e1e1e;
-      border-radius: 10px;
-      padding: 20px;
-    }
   </style>
 </head>
 <body>
@@ -116,7 +109,7 @@
     <h1>📊 Controle Financeiro Familiar</h1>
     <nav>
       <a href="#">Transações</a>
-      <a href="#grafico">Dashboard</a>
+      <a href="#">Dashboard</a>
       <a href="#">Relatórios</a>
     </nav>
   </header>
@@ -184,37 +177,12 @@
       </thead>
       <tbody></tbody>
     </table>
-
-    <div class="grafico-container">
-      <canvas id="graficoBarras"></canvas>
-    </div>
   </div>
 
   <script>
     let totalReceitas = 0;
     let totalDespesas = 0;
     const transacoes = [];
-
-    const ctx = document.getElementById('graficoBarras').getContext('2d');
-    const graficoBarras = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: ['Receitas', 'Despesas', 'Saldo'],
-        datasets: [{
-          label: 'Resumo Financeiro',
-          data: [0, 0, 0],
-          backgroundColor: ['#28a745', '#dc3545', '#007bff']
-        }]
-      },
-      options: {
-        responsive: true,
-        scales: {
-          y: {
-            beginAtZero: true
-          }
-        }
-      }
-    });
 
     document.getElementById('transacaoForm').addEventListener('submit', function(e) {
       e.preventDefault();
@@ -229,13 +197,16 @@
       const transacao = { tipo, categoria, valor, descricao, data, usuario };
       transacoes.push(transacao);
 
-      fetch('https://script.google.com/macros/s/AKfycbzLo5vPaDlInhXfaCZFEnvaky9ayPOxPZbNsl9UB6_Xo8o7z8KmmKMLtqHp8MlOq9ZG/exec', {
+      fetch('https://script.google.com/macros/s/AKfycbx7fj0OLH8GOm_Wt-QceAN9fzDP1tcu7uIGpGFdhC6YqqXk1oNuwTGUmuGzB9hziOyo/exec', {
         method: 'POST',
         body: JSON.stringify(transacao),
         headers: {
           'Content-Type': 'application/json'
         }
-      });
+      })
+      .then(res => res.text())
+      .then(res => console.log('Resposta da API:', res))
+      .catch(err => console.error('Erro ao salvar no Google Sheets:', err));
 
       const tabela = document.getElementById('tabelaTransacoes').querySelector('tbody');
       const linha = tabela.insertRow();
@@ -257,9 +228,6 @@
       document.getElementById('despesasTotal').textContent = totalDespesas.toFixed(2);
       document.getElementById('saldoTotal').textContent = saldo.toFixed(2);
 
-      graficoBarras.data.datasets[0].data = [totalReceitas, totalDespesas, saldo];
-      graficoBarras.update();
-
       document.getElementById('alert').style.display = 'block';
       setTimeout(() => {
         document.getElementById('alert').style.display = 'none';
@@ -272,7 +240,8 @@
     function exportarCSV() {
       const linhas = ['Tipo,Categoria,Valor,Descrição,Data,Usuário'];
       for (const t of transacoes) {
-        linhas.push(`${t.tipo},${t.categoria},${t.valor},${t.descricao},${t.data},${t.usuario}`);
+        const valorFormatado = t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        linhas.push(`${t.tipo},${t.categoria},${valorFormatado},${t.descricao},${t.data},${t.usuario}`);
       }
       const csv = linhas.join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
