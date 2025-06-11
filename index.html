@@ -102,6 +102,11 @@
       margin-top: 10px;
       background: #17a2b8;
     }
+    .filters {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
   </style>
 </head>
 <body>
@@ -162,6 +167,22 @@
       <button type="submit">💾 Adicionar Transação</button>
     </form>
 
+    <div class="filters">
+      <label>Filtrar por Mês:
+        <input type="month" id="filtroMes" />
+      </label>
+      <label>Filtrar por Categoria:
+        <select id="filtroCategoria">
+          <option value="">Todas</option>
+          <option value="Salário">Salário</option>
+          <option value="Aluguel">Aluguel</option>
+          <option value="Impostos e Multas">Impostos e Multas</option>
+          <option value="Outros">Outros</option>
+        </select>
+      </label>
+      <button onclick="aplicarFiltros()">🔍 Aplicar Filtros</button>
+    </div>
+
     <button class="export-btn" onclick="exportarCSV()">⬇️ Exportar para CSV</button>
 
     <table id="tabelaTransacoes">
@@ -203,45 +224,44 @@
         headers: {
           'Content-Type': 'application/json'
         }
-      })
-      .then(res => res.text())
-      .then(res => console.log('Resposta da API:', res))
-      .catch(err => console.error('Erro ao salvar no Google Sheets:', err));
+      });
 
-      const tabela = document.getElementById('tabelaTransacoes').querySelector('tbody');
-      const linha = tabela.insertRow();
-      linha.insertCell(0).textContent = tipo;
-      linha.insertCell(1).textContent = categoria;
-      linha.insertCell(2).textContent = `R$ ${valor.toFixed(2)}`;
-      linha.insertCell(3).textContent = descricao;
-      linha.insertCell(4).textContent = data;
-      linha.insertCell(5).textContent = usuario;
+      atualizarTabela(transacoes);
+      this.reset();
+      document.getElementById('data').value = new Date().toISOString().split('T')[0];
+      document.getElementById('alert').style.display = 'block';
+      setTimeout(() => document.getElementById('alert').style.display = 'none', 3000);
+    });
 
-      if (tipo === 'receita') {
-        totalReceitas += valor;
-      } else {
-        totalDespesas += valor;
+    function atualizarTabela(lista) {
+      const tbody = document.getElementById('tabelaTransacoes').querySelector('tbody');
+      tbody.innerHTML = '';
+      totalReceitas = 0;
+      totalDespesas = 0;
+
+      for (const t of lista) {
+        const linha = tbody.insertRow();
+        linha.insertCell(0).textContent = t.tipo;
+        linha.insertCell(1).textContent = t.categoria;
+        linha.insertCell(2).textContent = `R$ ${t.valor.toFixed(2)}`;
+        linha.insertCell(3).textContent = t.descricao;
+        linha.insertCell(4).textContent = t.data;
+        linha.insertCell(5).textContent = t.usuario;
+
+        if (t.tipo === 'receita') totalReceitas += t.valor;
+        else totalDespesas += t.valor;
       }
 
       const saldo = totalReceitas - totalDespesas;
       document.getElementById('receitasTotal').textContent = totalReceitas.toFixed(2);
       document.getElementById('despesasTotal').textContent = totalDespesas.toFixed(2);
       document.getElementById('saldoTotal').textContent = saldo.toFixed(2);
-
-      document.getElementById('alert').style.display = 'block';
-      setTimeout(() => {
-        document.getElementById('alert').style.display = 'none';
-      }, 3000);
-
-      this.reset();
-      document.getElementById('data').value = new Date().toISOString().split('T')[0];
-    });
+    }
 
     function exportarCSV() {
       const linhas = ['Tipo,Categoria,Valor,Descrição,Data,Usuário'];
       for (const t of transacoes) {
-        const valorFormatado = t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        linhas.push(`${t.tipo},${t.categoria},${valorFormatado},${t.descricao},${t.data},${t.usuario}`);
+        linhas.push(`${t.tipo},${t.categoria},${t.valor},${t.descricao},${t.data},${t.usuario}`);
       }
       const csv = linhas.join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -249,10 +269,22 @@
       const link = document.createElement('a');
       link.setAttribute('href', url);
       link.setAttribute('download', 'transacoes.csv');
-      link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+
+    function aplicarFiltros() {
+      const mes = document.getElementById('filtroMes').value;
+      const categoria = document.getElementById('filtroCategoria').value;
+
+      const listaFiltrada = transacoes.filter(t => {
+        const mesmoMes = mes ? t.data.startsWith(mes) : true;
+        const mesmaCategoria = categoria ? t.categoria === categoria : true;
+        return mesmoMes && mesmaCategoria;
+      });
+
+      atualizarTabela(listaFiltrada);
     }
   </script>
 </body>
