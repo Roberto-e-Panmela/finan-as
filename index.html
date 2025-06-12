@@ -41,7 +41,7 @@
       margin-bottom: 20px;
       display: none;
     }
-    .alert.error { /* Adicione uma classe para erro */
+    .alert.error {
       background: #f8d7da;
       color: #721c24;
     }
@@ -125,7 +125,9 @@
   </header>
   <div class="container">
     <div id="alertSuccess" class="alert">Transação adicionada com sucesso!</div>
-    <div id="alertError" class="alert error"></div> <div class="cards">
+    <div id="alertError" class="alert error"></div>
+
+    <div class="cards">
       <div class="card receitas" id="receitasCard">
         ↑ Receitas<br />
         R$ <span id="receitasTotal">0.00</span>
@@ -143,25 +145,31 @@
     <form action="https://script.google.com/macros/s/AKfycbycpLP4IPnCHiR1TXNiyqOEXnrRf38KIhPgxHu_0cvY3jwMi2gNyQiT861Rjj-Of0Nc/exec" method="POST">
       <h2>➕ Nova Transação</h2>
       <label>Tipo:
-        <select id="tipo" name="tipo"> <option value="receita">Receita</option>
+        <select id="tipo" name="tipo">
+          <option value="receita">Receita</option>
           <option value="despesa">Despesa</option>
         </select>
       </label>
       <label>Categoria:
-        <select id="categoria" name="categoria"> <option value="Salário">Salário</option>
+        <select id="categoria" name="categoria">
+          <option value="Salário">Salário</option>
           <option value="Aluguel">Aluguel</option>
           <option value="Impostos e Multas">Impostos e Multas</option>
           <option value="Outros">Outros</option>
         </select>
       </label>
       <label>Valor:
-        <input type="number" id="valor" name="valor" required /> </label>
+        <input type="number" id="valor" name="valor" required />
+      </label>
       <label>Descrição:
-        <input type="text" id="descricao" name="descricao" /> </label>
+        <input type="text" id="descricao" name="descricao" />
+      </label>
       <label>Data:
-        <input type="date" id="data" name="data" value="2025-06-11" /> </label>
+        <input type="date" id="data" name="data" value="2025-06-11" />
+      </label>
       <label>Usuário:
-        <input type="text" id="usuario" name="usuario" /> </label>
+        <input type="text" id="usuario" name="usuario" />
+      </label>
       <button type="submit">💾 Adicionar Transação</button>
     </form>
 
@@ -199,12 +207,12 @@
   </div>
 
   <script>
-    let totalReceitas = 0;
-    let totalDespesas = 0;
-    const transacoes = []; // Este array agora só guarda as transações LOCALMENTE para exibição.
-                           // O salvamento persistente será feito pelo Google Apps Script.
+    // URL do seu Google Apps Script (a mesma que você usa no action do formulário)
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbycpLP4IPnCHiR1TXNiyqOEXnrRf38KIhPgxHu_0cvY3jwMi2gNyQiT861Rjj-Of0Nc/exec';
 
-    // A URL atual será usada para ler parâmetros de sucesso/erro após o redirecionamento do Apps Script
+    let transacoes = []; // Este array agora será preenchido com os dados da planilha
+
+    // Lida com as mensagens de sucesso/erro após o redirecionamento do Apps Script
     const urlParams = new URLSearchParams(window.location.search);
     const status = urlParams.get('status');
     const message = urlParams.get('message');
@@ -212,35 +220,54 @@
     if (status === 'success') {
       document.getElementById('alertSuccess').style.display = 'block';
       setTimeout(() => document.getElementById('alertSuccess').style.display = 'none', 3000);
-      // Limpar parâmetros da URL para evitar mostrar o alerta novamente em recarregamentos
       history.replaceState(null, '', window.location.pathname); 
     } else if (status === 'error') {
       const alertErrorDiv = document.getElementById('alertError');
       alertErrorDiv.textContent = `Erro: ${decodeURIComponent(message || 'Ocorreu um erro desconhecido.')}`;
       alertErrorDiv.style.display = 'block';
-      alertErrorDiv.classList.add('error'); // Adiciona a classe de erro CSS
+      alertErrorDiv.classList.add('error');
       setTimeout(() => alertErrorDiv.style.display = 'none', 5000);
       history.replaceState(null, '', window.location.pathname);
     }
 
-    // Inicializa a data atual no campo
+    // Função para carregar as transações da planilha
+    async function carregarTransacoes() {
+      try {
+        const response = await fetch(`${APPS_SCRIPT_URL}?action=readData`);
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          transacoes = data.data; // Preenche o array com os dados da planilha
+          atualizarTabela(transacoes); // Atualiza a tabela com todos os dados
+        } else {
+          console.error('Erro ao carregar transações:', data.message);
+          const alertErrorDiv = document.getElementById('alertError');
+          alertErrorDiv.textContent = `Erro ao carregar transações: ${data.message}`;
+          alertErrorDiv.style.display = 'block';
+          alertErrorDiv.classList.add('error');
+        }
+      } catch (error) {
+        console.error('Erro na requisição de carregamento:', error);
+        const alertErrorDiv = document.getElementById('alertError');
+        alertErrorDiv.textContent = `Erro de rede ao carregar transações: ${error.message}`;
+        alertErrorDiv.style.display = 'block';
+        alertErrorDiv.classList.add('error');
+      }
+    }
+
+    // Chama a função para carregar as transações quando a página carrega
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('data').value = new Date().toISOString().split('T')[0];
+      carregarTransacoes(); // Carrega os dados da planilha
     });
 
-    // Remova o addEventListener para o formulário se você quer o envio tradicional.
-    // Se você mantiver, ele vai impedir o envio padrão e você terá que gerenciar tudo com fetch.
-    // Para simplificar, vou remover.
-
-    // A função atualizarTabela agora precisa de um jeito de CARREGAR os dados do Google Sheet
-    // na inicialização da página. Isso exigiria uma função doGet no Apps Script que retornasse
-    // todos os dados da planilha. Por enquanto, ela só exibirá as transações adicionadas localmente.
-
+    // Função para atualizar a tabela com base em uma lista de transações
     function atualizarTabela(lista) {
       const tbody = document.getElementById('tabelaTransacoes').querySelector('tbody');
-      tbody.innerHTML = '';
-      totalReceitas = 0;
-      totalDespesas = 0;
+      tbody.innerHTML = ''; // Limpa a tabela antes de preencher
+      
+      let totalReceitas = 0;
+      let totalDespesas = 0;
 
       for (const t of lista) {
         const linha = tbody.insertRow();
@@ -261,17 +288,57 @@
       document.getElementById('saldoTotal').textContent = saldo.toFixed(2);
     }
 
-    // Estas funções (exportarCSV e aplicarFiltros) só funcionarão com os dados
-    // que foram adicionados *localmente* no array 'transacoes' durante a sessão.
-    // Para que elas funcionem com todos os dados salvos na planilha, você precisaria
-    // de uma função no Google Apps Script para BUSCAR todos os dados da planilha
-    // e carregar no array 'transacoes' ao iniciar a página.
-    function exportarCSV() {
-      // ... (sem alterações)
+    // Função aplicarFiltros (agora funciona com o array 'transacoes' carregado)
+    function aplicarFiltros() {
+      const filtroMes = document.getElementById('filtroMes').value;
+      const filtroCategoria = document.getElementById('filtroCategoria').value;
+
+      let transacoesFiltradas = transacoes; // Começa com todas as transações
+
+      if (filtroMes) {
+        transacoesFiltradas = transacoesFiltradas.filter(t => {
+          // A data da transação é 'YYYY-MM-DD', o filtro é 'YYYY-MM'
+          return t.data.startsWith(filtroMes);
+        });
+      }
+
+      if (filtroCategoria) {
+        transacoesFiltradas = transacoesFiltradas.filter(t => {
+          return t.categoria === filtroCategoria;
+        });
+      }
+
+      atualizarTabela(transacoesFiltradas);
     }
 
-    function aplicarFiltros() {
-      // ... (sem alterações)
+    // Função exportarCSV (agora usa o array 'transacoes' para exportar tudo)
+    function exportarCSV() {
+      const headers = ['Tipo', 'Categoria', 'Valor', 'Descrição', 'Data', 'Usuário'];
+      let csv = headers.join(',') + '\n'; // Adiciona o cabeçalho
+
+      transacoes.forEach(t => { // Itera sobre todas as transações carregadas
+        const row = [
+          t.tipo,
+          t.categoria,
+          t.valor,
+          t.descricao,
+          t.data,
+          t.usuario
+        ].map(item => `"${item}"`).join(','); // Adiciona aspas para lidar com vírgulas na descrição
+        csv += row + '\n';
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'transacoes.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     }
   </script>
 </body>
