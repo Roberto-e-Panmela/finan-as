@@ -142,7 +142,7 @@
       </div>
     </div>
 
-    <form action="https://script.google.com/macros/s/AKfycbycpLP4IPnCHiR1TXNiyqOEXnrRf38KIhPgxHu_0cvY3jwMi2gNyQiT861Rjj-Of0Nc/exec" method="POST">
+    <form id="transacaoForm"> 
       <h2>➕ Nova Transação</h2>
       <label>Tipo:
         <select id="tipo" name="tipo">
@@ -206,59 +206,78 @@
     </table>
   </div>
 
-  <script>
-    // URL do seu Google Apps Script (a mesma que você usa no action do formulário)
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbycpLP4IPnCHiR1TXNiyqOEXnrRf38KIhPgxHu_0cvY3jwMi2gNyQiT861Rjj-Of0Nc/exec';
+  <script type="module">
+    // Importar as bibliotecas do Firebase
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    let transacoes = []; // Este array agora será preenchido com os dados da planilha
+    // **** SUAS CONFIGURAÇÕES DO FIREBASE AQUI ****
+    // Cole o objeto firebaseConfig que você copiou do Console do Firebase
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
 
-    // Lida com as mensagens de sucesso/erro após o redirecionamento do Apps Script
-    const urlParams = new URLSearchParams(window.location.search);
-    const status = urlParams.get('status');
-    const message = urlParams.get('message');
+    // Inicializar o Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app); // Obter a instância do Firestore
 
-    if (status === 'success') {
-      document.getElementById('alertSuccess').style.display = 'block';
-      setTimeout(() => document.getElementById('alertSuccess').style.display = 'none', 3000);
-      history.replaceState(null, '', window.location.pathname); 
-    } else if (status === 'error') {
-      const alertErrorDiv = document.getElementById('alertError');
-      alertErrorDiv.textContent = `Erro: ${decodeURIComponent(message || 'Ocorreu um erro desconhecido.')}`;
-      alertErrorDiv.style.display = 'block';
-      alertErrorDiv.classList.add('error');
-      setTimeout(() => alertErrorDiv.style.display = 'none', 5000);
-      history.replaceState(null, '', window.location.pathname);
-    }
+    let transacoes = []; // Este array será preenchido com os dados do Firestore
 
-    // Função para carregar as transações da planilha
-    async function carregarTransacoes() {
-      try {
-        const response = await fetch(`${APPS_SCRIPT_URL}?action=readData`);
-        const data = await response.json();
-
-        if (data.status === 'success') {
-          transacoes = data.data; // Preenche o array com os dados da planilha
-          atualizarTabela(transacoes); // Atualiza a tabela com todos os dados
-        } else {
-          console.error('Erro ao carregar transações:', data.message);
-          const alertErrorDiv = document.getElementById('alertError');
-          alertErrorDiv.textContent = `Erro ao carregar transações: ${data.message}`;
-          alertErrorDiv.style.display = 'block';
-          alertErrorDiv.classList.add('error');
-        }
-      } catch (error) {
-        console.error('Erro na requisição de carregamento:', error);
-        const alertErrorDiv = document.getElementById('alertError');
-        alertErrorDiv.textContent = `Erro de rede ao carregar transações: ${error.message}`;
-        alertErrorDiv.style.display = 'block';
-        alertErrorDiv.classList.add('error');
-      }
-    }
-
-    // Chama a função para carregar as transações quando a página carrega
+    // Limpar parâmetros da URL (não precisamos mais de status de redirecionamento)
     document.addEventListener('DOMContentLoaded', () => {
+      history.replaceState(null, '', window.location.pathname); 
       document.getElementById('data').value = new Date().toISOString().split('T')[0];
-      carregarTransacoes(); // Carrega os dados da planilha
+    });
+
+    // Função para adicionar transação ao Firestore
+    document.getElementById('transacaoForm').addEventListener('submit', async function(e) {
+      e.preventDefault(); // Impede o envio padrão do formulário (e recarregamento da página)
+
+      const tipo = document.getElementById('tipo').value;
+      const categoria = document.getElementById('categoria').value;
+      const valor = parseFloat(document.getElementById('valor').value);
+      const descricao = document.getElementById('descricao').value;
+      const data = document.getElementById('data').value;
+      const usuario = document.getElementById('usuario').value;
+
+      try {
+        await addDoc(collection(db, "transacoes"), { // Adiciona um novo documento na coleção "transacoes"
+          tipo: tipo,
+          categoria: categoria,
+          valor: valor,
+          descricao: descricao,
+          data: data,
+          usuario: usuario,
+          timestamp: new Date() // Adiciona um timestamp para ordenação
+        });
+
+        // Exibe o alerta de sucesso
+        document.getElementById('alertSuccess').style.display = 'block';
+        setTimeout(() => document.getElementById('alertSuccess').style.display = 'none', 3000);
+        this.reset(); // Limpa o formulário
+        document.getElementById('data').value = new Date().toISOString().split('T')[0]; // Define a data atual
+        
+      } catch (e) {
+        console.error("Erro ao adicionar documento: ", e);
+        const alertErrorDiv = document.getElementById('alertError');
+        alertErrorDiv.textContent = `Erro ao salvar: ${e.message}`;
+        alertErrorDiv.style.display = 'block';
+      }
+    });
+
+    // Função para carregar transações do Firestore em tempo real
+    // onSnapshot cria um "ouvinte" que atualiza 'transacoes' sempre que o banco de dados muda
+    onSnapshot(query(collection(db, "transacoes"), orderBy("timestamp", "desc")), (snapshot) => {
+      transacoes = []; // Limpa o array antes de preencher
+      snapshot.forEach((doc) => {
+        transacoes.push({ id: doc.id, ...doc.data() }); // Adiciona o ID do documento e os dados
+      });
+      aplicarFiltros(); // Chama aplicarFiltros para atualizar a tabela com os dados mais recentes (e aplicar filtros existentes)
     });
 
     // Função para atualizar a tabela com base em uma lista de transações
@@ -288,16 +307,15 @@
       document.getElementById('saldoTotal').textContent = saldo.toFixed(2);
     }
 
-    // Função aplicarFiltros (agora funciona com o array 'transacoes' carregado)
+    // Função aplicarFiltros (agora funciona com o array 'transacoes' carregado pelo Firestore)
     function aplicarFiltros() {
       const filtroMes = document.getElementById('filtroMes').value;
       const filtroCategoria = document.getElementById('filtroCategoria').value;
 
-      let transacoesFiltradas = transacoes; // Começa com todas as transações
+      let transacoesFiltradas = transacoes; // Começa com todas as transações carregadas pelo Firestore
 
       if (filtroMes) {
         transacoesFiltradas = transacoesFiltradas.filter(t => {
-          // A data da transação é 'YYYY-MM-DD', o filtro é 'YYYY-MM'
           return t.data.startsWith(filtroMes);
         });
       }
@@ -311,12 +329,12 @@
       atualizarTabela(transacoesFiltradas);
     }
 
-    // Função exportarCSV (agora usa o array 'transacoes' para exportar tudo)
+    // Função exportarCSV (agora usa o array 'transacoes' populado pelo Firestore)
     function exportarCSV() {
       const headers = ['Tipo', 'Categoria', 'Valor', 'Descrição', 'Data', 'Usuário'];
-      let csv = headers.join(',') + '\n'; // Adiciona o cabeçalho
+      let csv = headers.join(',') + '\n';
 
-      transacoes.forEach(t => { // Itera sobre todas as transações carregadas
+      transacoes.forEach(t => { 
         const row = [
           t.tipo,
           t.categoria,
@@ -324,7 +342,7 @@
           t.descricao,
           t.data,
           t.usuario
-        ].map(item => `"${item}"`).join(','); // Adiciona aspas para lidar com vírgulas na descrição
+        ].map(item => `"${item}"`).join(','); 
         csv += row + '\n';
       });
 
