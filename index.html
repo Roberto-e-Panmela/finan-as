@@ -217,8 +217,9 @@
 
       const transacao = { tipo, categoria, valor, descricao, data, usuario };
       transacoes.push(transacao);
+      
+      fetch('https://script.google.com/macros/s/AKfycbxwyJJ1ahdpZPmGtip_lPyz6O8ZZSASuSc9_BSgrHrFrnqpL3anCQp-38O7WzzTKcdY/exec', {
 
-      fetch('https://script.google.com/macros/s/AKfycbx7fj0OLH8GOm_Wt-QceAN9fzDP1tcu7uIGpGFdhC6YqqXk1oNuwTGUmuGzB9hziOyo/exec', {
         method: 'POST',
         body: JSON.stringify(transacao),
         headers: {
